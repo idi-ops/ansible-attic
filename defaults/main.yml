@@ -1,0 +1,11 @@
+---
+attic_version: 0.14
+
+attic_tar_archive: "Attic-{{ attic_version }}-linux-x86_64.tar.gz"
+
+attic_download_url: "https://attic-backup.org/downloads/releases/{{ attic_version }}/{{ attic_tar_archive }}"
+
+attic_signing_key: ACCDCC2D
+
+attic_pgp_key_server: pgpkeys.mit.edu
+
