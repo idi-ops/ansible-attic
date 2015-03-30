@@ -1,0 +1,17 @@
+# roles/attic/tasks/create.yml
+---
+
+- name: Backup | Fail if attic_backup_dirs has not been defined
+  fail:
+    msg: "Need to define attic_backup_dirs"
+  when: attic_backup_dirs is not defined or attic_backup_dirs == ""
+
+- name: Backup | Generate timestamp
+  set_fact:
+    backup_timestamp: "{{ lookup('pipe', 'date +%Y%m%d%H%M%S') }}"
+
+- name: Backup | Create backup locally
+  command: "{{ attic_executable}} create {{ attic_local_repository}}::{{ backup_timestamp }} {{ attic_backup_dirs }}"
+  environment:
+    ATTIC_PASSPHRASE: "{{ attic_repository_passphrase }}"
+

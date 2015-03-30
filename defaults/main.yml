@@ -9,3 +9,13 @@ attic_signing_key: ACCDCC2D
 
 attic_pgp_key_server: pgpkeys.mit.edu
 
+attic_install_dir: /opt
+
+attic_executable: /usr/bin/attic
+
+attic_local_repository: /var/lib/attic
+
+attic_backup_dirs: ""
+
+# This should be in ansible-vault
+attic_repository_passphrase: "123"
