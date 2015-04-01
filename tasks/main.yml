@@ -1,50 +1,13 @@
+# roles/attic/tasks/main.yml
 ---
-- name: Ensure required packages are installed
-  yum:
-    name: "{{ item }}"
-    state: present
-  with_items:
-    - gnupg2
-    - tar
-    
-- name: Download Attic tar archive
-  get_url:
-    url: "{{ attic_download_url }}"
-    dest: "/tmp/{{ attic_tar_archive }}"
 
-- name: Download Attic tar archive signature
-  get_url:
-    url: "{{ attic_download_url }}.asc"
-    dest: "/tmp/{{ attic_tar_archive }}.asc"
-
-# Ignore errors so that the next play will download the missing key
-- name: Check to see if the signing key is installed
-  command: gpg --list-keys {{ attic_signing_key }}
-  register: gpg_key_result
-  ignore_errors: True
-  
-- name: Download and install the key if required
-  command: gpg --keyserver {{ attic_pgp_key_server }} --recv-key {{ attic_signing_key }}
-  when: gpg_key_result|failed
-
-# Ignore errors so that we can fail with a more meaningful message in the next play
-- name: Verify tar archive signature
-  command: gpg /tmp/{{ attic_tar_archive }}.asc
-  register: gpg_sig_result
-  ignore_errors: True
-
-- name: Stop if signature check failed
+- name: Fail if attic_repository_passphrase has not been defined or is empty
   fail:
-    msg: "Signature check of downloaded tar archive failed"
-  when: gpg_sig_result.stdout.find('Good signature') != -1
-  
-- name: Extract downloaded tar archive
-  unarchive:
-    src: "/tmp/{{ attic_tar_archive }}"
-    dest: /opt
+    msg: "Ensure the attic_repository_passphrase is defined (or set ATTIC_PASSPHRASE environment variable)"
+  when: attic_repository_passphrase is not defined or attic_repository_passphrase == ""
 
-- name: Create a symlink pointing to attic binary in the extracted directory
-  file:
-    src: "/opt/Attic-{{ attic_version }}-linux-x86_64/attic"
-    dest: /usr/bin/attic
-    state: link
+- include: install.yml
+  when: attic_action == "install"
+
+- include: backup.yml
+  when: attic_action == "backup"

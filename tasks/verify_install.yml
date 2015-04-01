@@ -1,0 +1,10 @@
+# roles/attic/tasks/verify_install.yml
+---
+
+- name: Fail if Attic executable is not available
+  stat:
+    path: "{{ attic_executable }}"
+    follow: yes
+  register: st
+  failed_when: not st.stat.exists
+

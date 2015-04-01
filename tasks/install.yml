@@ -1,0 +1,69 @@
+---
+- name: Ensure required packages are installed
+  yum:
+    name: "{{ item }}"
+    state: present
+  with_items:
+    - gnupg2
+    - tar
+    
+- name: Download Attic tar archive
+  get_url:
+    url: "{{ attic_download_url }}"
+    dest: "/tmp/{{ attic_tar_archive }}"
+
+- name: Download Attic tar archive signature
+  get_url:
+    url: "{{ attic_download_url }}.asc"
+    dest: "/tmp/{{ attic_tar_archive }}.asc"
+
+# Ignore errors so that the next play will download the missing key
+- name: Check to see if the signing key is installed
+  command: "gpg --list-keys {{ attic_signing_key }}"
+  register: gpg_key_result
+  ignore_errors: True
+  
+- name: Download and install the key if required
+  command: "gpg --keyserver {{ attic_pgp_key_server }} --recv-key {{ attic_signing_key }}"
+  when: gpg_key_result|failed
+
+# Ignore errors so that we can fail with a more meaningful message in the next play
+- name: Verify tar archive signature
+  command: "gpg /tmp/{{ attic_tar_archive }}.asc"
+  register: gpg_sig_result
+  ignore_errors: True
+
+- name: Stop if signature check failed
+  fail:
+    msg: "Signature check of downloaded tar archive failed"
+  when: gpg_sig_result.stdout.find('Good signature') != -1
+  
+- name: Extract downloaded tar archive
+  unarchive:
+    src: "/tmp/{{ attic_tar_archive }}"
+    dest: "{{ attic_install_dir }}"
+    copy: no
+
+- name: Create a symlink to attic binarry
+  file:
+    src: "/opt/Attic-{{ attic_version }}-linux-x86_64/attic"
+    dest: "{{ attic_executable }}"
+    state: link
+
+- name: Remove existing local repository directory
+  file:
+    path: "{{ attic_repository_path }}"
+    state: absent
+  when: attic_repository_overwrite
+
+- name: Verify if local repository has already been initialized
+  stat:
+    path: "{{ attic_repository_path }}/README"
+  register: localrepo
+
+- name: Initialize local repository
+  command: "{{ attic_executable }} init -e passphrase {{ attic_repository_path }}"
+  environment:
+    ATTIC_PASSPHRASE: "{{ attic_repository_passphrase }}"
+  when: not localrepo.stat.exists 
+

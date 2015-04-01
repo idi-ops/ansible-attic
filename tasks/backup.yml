@@ -1,0 +1,21 @@
+# roles/attic/tasks/create.yml
+---
+
+- include: verify_install.yml
+
+- name: Fail if attic_include_list is empty
+  fail:
+    msg: "Need to define attic_include_list"
+  when: "attic_include_list|length == 0"
+
+- name: Create backup
+  command: "{{ attic_executable }} create {{ attic_repository_path }}::{{ ansible_hostname }}-{{ attic_tag }}-{{ attic_timestamp }} {{ attic_include_parameters }}"
+  environment:
+    ATTIC_PASSPHRASE: "{{ attic_repository_passphrase }}"
+  when: "attic_exclude_list|length == 0"
+
+- name: Create backup (with excludes)
+  command: "{{ attic_executable }} create {{ attic_repository_path }}::{{ ansible_hostname }}-{{ attic_backup_tag }}-{{ attic_backup_timestamp }} {{ attic_exclude_parameters }} {{ attic_include_parameters }}"
+  environment:
+    ATTIC_PASSPHRASE: "{{ attic_repository_passphrase }}"
+  when: "attic_exclude_list|length != 0"
