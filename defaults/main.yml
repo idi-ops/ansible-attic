@@ -13,9 +13,30 @@ attic_install_dir: /opt
 
 attic_executable: /usr/bin/attic
 
-attic_local_repository: /var/lib/attic
+attic_repository_path: /var/lib/attic
 
-attic_backup_dirs: ""
+attic_repository_overwrite: no
 
-# This should be in ansible-vault
-attic_repository_passphrase: "123"
+attic_repository_passphrase: "{{ lookup('env', 'ATTIC_PASSPHRASE') }}"
+
+# List of directories to be included (should always be defined)
+attic_include_list: []
+
+# List of directories to be excluded
+attic_exclude_list: []
+
+# Something to identify that specific backup (eg. projectA-daily, projectB-weekly, etc)
+attic_tag: "default"
+
+# How many backup copies to keep for the that that was defined
+attic_copies: 7
+
+# Timestamp (should be as detailed as possible, ie, include seconds usually)
+attic_timestamp: "{{ lookup('pipe', 'date +%Y%m%d%H%M%S') }}"
+
+# Do not change
+attic_include_parameters: "{{ attic_include_list|join(' ') }}"
+
+# Do not change
+attic_exclude_parameters: "--exclude {{ attic_exclude_list|join(' --exclude ') }}"
+
