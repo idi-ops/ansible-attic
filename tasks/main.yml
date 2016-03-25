@@ -1,13 +1,12 @@
 # roles/attic/tasks/main.yml
 ---
 
-- name: Fail if attic_repository_passphrase has not been defined or is empty
+- name: Fail early if attic_repository_passphrase has not been defined or is empty
   fail:
     msg: "Ensure the attic_repository_passphrase is defined (or set ATTIC_PASSPHRASE environment variable)"
   when: attic_repository_passphrase is not defined or attic_repository_passphrase == ""
+  tags: ["always"]
 
-- include: install.yml
-  when: attic_action == "install"
+- { include: install.yml, tags: ["install"] }
 
-- include: backup.yml
-  when: attic_action == "backup"
+- { include: backup.yml, tags: ["backup"] }

@@ -1,21 +1,93 @@
-# roles/attic/tasks/create.yml
+# roles/attic/tasks/backup.yml
 ---
 
-- include: verify_install.yml
+# Pre-requisites
 
 - name: Fail if attic_include_list is empty
   fail:
     msg: "Need to define attic_include_list"
   when: "attic_include_list|length == 0"
 
-- name: Create backup
-  command: "{{ attic_executable }} create {{ attic_repository_path }}::{{ ansible_hostname }}-{{ attic_tag }}-{{ attic_timestamp }} {{ attic_include_parameters }}"
+
+- name: Fail if Attic executable is not available
+  stat:
+    path: "{{ attic_executable }}"
+    follow: yes
+  register: st
+  failed_when: not st.stat.exists
+
+# Repository
+
+- name: Remove existing local repository directory
+  file:
+    path: "{{ attic_repository_path }}"
+    state: absent
+  when: "attic_repository_type == 'local' and attic_repository_overwrite"
+
+- name: Remove existing remote repository directory
+  command: "/usr/bin/ssh -i {{ attic_repository_key }} -o StrictHostKeyChecking=no -p {{ attic_repository_port }} {{ attic_repository_user}}@{{ attic_repository_server}} 'rm -rf {{ ansible_hostname }}'"
+  when: "attic_repository_type == 'remote' and attic_repository_overwrite"
+
+- name: Verify if local repository has already been initialized
+  stat:
+    path: "{{ attic_repository_path }}/README"
+  register: localrepo
+  when: attic_repository_type == 'local'
+
+- name: Verify if remote repository has already been initialized
+  command: "/usr/bin/ssh -i {{ attic_repository_key }} -o StrictHostKeyChecking=no -p {{ attic_repository_port }} {{ attic_repository_user}}@{{ attic_repository_server}} 'stat {{ attic_repository_path }}/{{ ansible_hostname }}.attic/README'"
+  ignore_errors: yes
+  failed_when: false
+  changed_when: false
+  register: remoterepo
+  when: attic_repository_type == 'remote'
+
+- name: Initialize local repository
+  command: "{{ attic_executable }} init -e passphrase {{ attic_repository_path }}"
   environment:
     ATTIC_PASSPHRASE: "{{ attic_repository_passphrase }}"
-  when: "attic_exclude_list|length == 0"
+  when: "attic_repository_type == 'local' and not localrepo.stat.exists"
+
+- name: Initialize remote repository
+  command: "{{ attic_executable }} init -e passphrase ssh://{{ attic_repository_user }}@{{ attic_repository_server }}:{{ attic_repository_port }}/{{ attic_repository_path }}/{{ ansible_hostname}}.attic"
+  environment:
+    ATTIC_PASSPHRASE: "{{ attic_repository_passphrase }}"
+  when: "attic_repository_type == 'remote' and remoterepo.rc == 1"
+
+# Backup
+
+- name: Create backup on local repository
+  command: "{{ attic_executable }} create {{ attic_repository_path }}::{{ attic_timestamp }} {{ attic_include_parameters }}"
+  environment:
+    ATTIC_PASSPHRASE: "{{ attic_repository_passphrase }}"
+  when: "attic_repository_type == 'local' and attic_exclude_list|length == 0"
+
+- name: Create backup on remote repository
+  command: "{{ attic_executable }} create ssh://{{ attic_repository_user }}@{{ attic_repository_server }}:{{ attic_repository_port }}/{{ attic_repository_path }}/{{ ansible_hostname }}.attic::{{ attic_timestamp }} {{ attic_include_parameters }}"
+  environment:
+    ATTIC_PASSPHRASE: "{{ attic_repository_passphrase }}"
+  when: "attic_repository_type == 'remote' and attic_exclude_list|length == 0"
 
 - name: Create backup (with excludes)
-  command: "{{ attic_executable }} create {{ attic_repository_path }}::{{ ansible_hostname }}-{{ attic_backup_tag }}-{{ attic_backup_timestamp }} {{ attic_exclude_parameters }} {{ attic_include_parameters }}"
+  command: "{{ attic_executable }} create {{ attic_repository_path }}::{{ attic_timestamp }} {{ attic_exclude_parameters }} {{ attic_include_parameters }}"
   environment:
     ATTIC_PASSPHRASE: "{{ attic_repository_passphrase }}"
   when: "attic_exclude_list|length != 0"
+
+- name: Create backup on remote repository (with excludes)
+  command: "{{ attic_executable }} create ssh://{{ attic_repository_user }}@{{ attic_repository_server }}:{{ attic_repository_port }}/{{ attic_repository_path }}/{{ ansible_hostname }}.attic::{{ attic_timestamp }} {{ attic_exclude_parameters }} {{ attic_include_parameters }}"
+  environment:
+    ATTIC_PASSPHRASE: "{{ attic_repository_passphrase }}"
+  when: "attic_repository_type == 'remote' and attic_exclude_list|length != 0"
+
+- name: Prune local repository
+  command: "{{ attic_executable }} prune {{ attic_repository_path }} --keep-daily={{ attic_keep_daily }} --keep-weekly={{ attic_keep_weekly }} --keep-monthly={{ attic_keep_monthly }}"
+  environment:
+    ATTIC_PASSPHRASE: "{{ attic_repository_passphrase }}"
+  when: attic_repository_type == 'local'
+
+- name: Prune remote repository
+  command: "{{ attic_executable }} prune ssh://{{ attic_repository_user }}@{{ attic_repository_server }}:{{ attic_repository_port }}/{{ attic_repository_path }}/{{ ansible_hostname }}.attic  --keep-daily={{ attic_keep_daily }} --keep-weekly={{ attic_keep_weekly }} --keep-monthly={{ attic_keep_monthly }}"
+  environment:
+    ATTIC_PASSPHRASE: "{{ attic_repository_passphrase }}"
+  when: attic_repository_type == 'remote'

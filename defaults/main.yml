@@ -1,5 +1,5 @@
 ---
-attic_version: 0.14
+attic_version: 0.16
 
 attic_tar_archive: "Attic-{{ attic_version }}-linux-x86_64.tar.gz"
 
@@ -13,11 +13,25 @@ attic_install_dir: /opt
 
 attic_executable: /usr/bin/attic
 
-attic_repository_path: /var/lib/attic
+attic_repository_type: local # local, remote
+
+attic_repository_path: /var/lib/attic # base path for remote repo, full path for local repo
 
 attic_repository_overwrite: no
 
 attic_repository_passphrase: "{{ lookup('env', 'ATTIC_PASSPHRASE') }}"
+
+# For remote repositories only
+#attic_repository_server
+#attic_repository_user: attic
+#attic_repository_port: 22
+attic_repository_key: /root/.ssh/attic
+attic_repository_key_overwrite: no
+
+# Prune options
+attic_keep_daily: 7
+attic_keep_weekly: 4
+attic_keep_monthly: 3
 
 # List of directories to be included (should always be defined)
 attic_include_list: []
@@ -25,18 +39,11 @@ attic_include_list: []
 # List of directories to be excluded
 attic_exclude_list: []
 
-# Something to identify that specific backup (eg. projectA-daily, projectB-weekly, etc)
-attic_tag: "default"
-
-# How many backup copies to keep for the that that was defined
-attic_copies: 7
-
 # Timestamp (should be as detailed as possible, ie, include seconds usually)
-attic_timestamp: "{{ lookup('pipe', 'date +%Y%m%d%H%M%S') }}"
+attic_timestamp: "{{ lookup('pipe', 'date +%Y%m%d-%H%M%S') }}"
 
 # Do not change
 attic_include_parameters: "{{ attic_include_list|join(' ') }}"
 
 # Do not change
 attic_exclude_parameters: "--exclude {{ attic_exclude_list|join(' --exclude ') }}"
-

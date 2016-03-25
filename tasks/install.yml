@@ -1,69 +1,102 @@
 ---
-- name: Ensure required packages are installed
+- name: Verify if attic is already installed
+  stat:
+    path: "{{ attic_executable }}"
+  register: attic_st
+
+- name: Ensure required packages for installation are installed
   yum:
     name: "{{ item }}"
     state: present
   with_items:
     - gnupg2
     - tar
+  when: not attic_st.stat.exists
     
 - name: Download Attic tar archive
   get_url:
     url: "{{ attic_download_url }}"
     dest: "/tmp/{{ attic_tar_archive }}"
+    validate_certs: no
+  when: not attic_st.stat.exists
 
 - name: Download Attic tar archive signature
   get_url:
     url: "{{ attic_download_url }}.asc"
     dest: "/tmp/{{ attic_tar_archive }}.asc"
+    validate_certs: no
+  when: not attic_st.stat.exists
 
 # Ignore errors so that the next play will download the missing key
-- name: Check to see if the signing key is installed
+- name: Verify if the signing key is installed
   command: "gpg --list-keys {{ attic_signing_key }}"
   register: gpg_key_result
-  ignore_errors: True
+  ignore_errors: yes
+  failed_when: false
+  when: not attic_st.stat.exists
   
-- name: Download and install the key if required
-  command: "gpg --keyserver {{ attic_pgp_key_server }} --recv-key {{ attic_signing_key }}"
-  when: gpg_key_result|failed
+# (ERROR-2015-12-15) gpgkeys: key ACCDCC2D can't be retrieved
+#- name: Install GPG key
+#  command: "gpg --keyserver {{ attic_pgp_key_server }} --recv-key {{ attic_signing_key }}"
+#  when: "not attic_st.stat.exists and gpg_key_result|failed"
+#
+#- name: Verify tar archive signature
+#  command: "gpg /tmp/{{ attic_tar_archive }}.asc"
+#  register: gpg_sig_result
+#  when: not attic_st.stat.exists
 
-# Ignore errors so that we can fail with a more meaningful message in the next play
-- name: Verify tar archive signature
-  command: "gpg /tmp/{{ attic_tar_archive }}.asc"
-  register: gpg_sig_result
-  ignore_errors: True
-
-- name: Stop if signature check failed
-  fail:
-    msg: "Signature check of downloaded tar archive failed"
-  when: gpg_sig_result.stdout.find('Good signature') != -1
-  
 - name: Extract downloaded tar archive
   unarchive:
     src: "/tmp/{{ attic_tar_archive }}"
     dest: "{{ attic_install_dir }}"
     copy: no
+  when: not attic_st.stat.exists
 
 - name: Create a symlink to attic binarry
   file:
     src: "/opt/Attic-{{ attic_version }}-linux-x86_64/attic"
     dest: "{{ attic_executable }}"
     state: link
+  when: not attic_st.stat.exists
 
-- name: Remove existing local repository directory
-  file:
-    path: "{{ attic_repository_path }}"
-    state: absent
-  when: attic_repository_overwrite
-
-- name: Verify if local repository has already been initialized
+- name: Verify if SSH backup key has already been created
   stat:
-    path: "{{ attic_repository_path }}/README"
-  register: localrepo
+    path: "{{ attic_repository_key }}"
+  register: sshkey_stat
 
-- name: Initialize local repository
-  command: "{{ attic_executable }} init -e passphrase {{ attic_repository_path }}"
-  environment:
-    ATTIC_PASSPHRASE: "{{ attic_repository_passphrase }}"
-  when: not localrepo.stat.exists 
+- name: Delete old SSH backup key
+  file:
+    path: "{{ item }}"
+    state: absent
+  with_items:
+    - "{{ attic_repository_key }}"
+    - "{{ attic_repository_key }}.pub"
+  when: attic_repository_key_overwrite
 
+- name: Create SSH backup key
+  command: "/usr/bin/ssh-keygen -t rsa -N \"\" -f {{ attic_repository_key }}"
+  when: not sshkey_stat.stat.exists or attic_repository_key_overwrite
+
+# This sucks (XXX)
+- name: Configure SSH client 1/2
+  lineinfile:
+    dest: "/root/.ssh/config"
+    line: "Host {{ attic_repository_server }}"
+    create: yes
+
+- name: Configure SSH client 2/3
+  lineinfile:
+    dest: "/root/.ssh/config"
+    line: "IdentityFile {{ attic_repository_key }}"
+    insertafter: "^Host {{ attic_repository_server }}$"
+    create: yes
+
+- name: Configure SSH client 3/3
+  lineinfile:
+    dest: "/root/.ssh/config"
+    line: "Port {{ attic_repository_port }}"
+    insertafter: "^IdentityFile {{ attic_repository_key }}$"
+    create: yes   
+
+- debug:
+    msg: "Please run backup_update_keys.yml to update the authorized_keys file on the backup server ({{ attic_repository_server }})"
