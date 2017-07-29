@@ -68,11 +68,11 @@
     ATTIC_PASSPHRASE: "{{ attic_repository_passphrase }}"
   when: "attic_repository_type == 'remote' and attic_exclude_list|length == 0"
 
-- name: Create backup (with excludes)
+- name: Create backup on local repository (with excludes)
   command: "{{ attic_executable }} create {{ attic_repository_path }}::{{ attic_timestamp }} {{ attic_exclude_parameters }} {{ attic_include_parameters }}"
   environment:
     ATTIC_PASSPHRASE: "{{ attic_repository_passphrase }}"
-  when: "attic_exclude_list|length != 0"
+  when: "attic_repository_type == 'local' and attic_exclude_list|length != 0"
 
 - name: Create backup on remote repository (with excludes)
   command: "{{ attic_executable }} create ssh://{{ attic_repository_user }}@{{ attic_repository_server }}:{{ attic_repository_port }}/{{ attic_repository_path }}/{{ ansible_hostname }}.attic::{{ attic_timestamp }} {{ attic_exclude_parameters }} {{ attic_include_parameters }}"
